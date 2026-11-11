@@ -13,7 +13,7 @@ RUN npm run build
 # ==============================================================================
 # Stage 2: Build Pure-Go Backend Binary (CGO_ENABLED=0)
 # ==============================================================================
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.27-alpine AS backend-builder
 WORKDIR /app/backend
 
 COPY backend/go.mod backend/go.sum ./
