@@ -1,0 +1,36 @@
+services:
+  eneba-marketplace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eneba-marketplace
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: production
+      PORT: "8080"
+      DB_PATH: /app/data/eneba.db
+      STATIC_DIR: /app/static
+      # Secret injection via mounted Docker Secret files (no plaintext credentials in compose file)
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      KEY_ENCRYPTION_SECRET_FILE: /run/secrets/key_encryption_secret
+    secrets:
+      - jwt_secret
+      - key_encryption_secret
+    volumes:
+      - eneba_sqlite_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+secrets:
+  jwt_secret:
+    file: ./.secrets/jwt_secret.txt
+  key_encryption_secret:
+    file: ./.secrets/key_encryption_secret.txt
+
+volumes:
+  eneba_sqlite_data:

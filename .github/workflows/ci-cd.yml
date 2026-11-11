@@ -1,0 +1,131 @@
+name: Eneba Marketplace CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ============================================================================
+  # 1. Security & Zero-Hardcoded-Secrets Audit
+  # ============================================================================
+  security-audit:
+    name: Security & Secret Injection Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify no .env or .secrets files are tracked in Git
+        run: |
+          if git ls-files --error-unmatch .env .secrets/* >/dev/null 2>&1; then
+            echo "ERROR: Secret files must never be committed to version control!"
+            exit 1
+          fi
+          echo "Verified: No secret files tracked in repository."
+
+  # ============================================================================
+  # 2. Go Backend Unit, Cryptography & End-to-End Integration Tests
+  # ============================================================================
+  backend-test:
+    name: Go API Tests & Vet
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache-dependency-path: backend/go.sum
+
+      - name: Run go vet static analysis
+        run: go vet ./...
+
+      - name: Execute Unit & Integration Tests with Injected Ephemeral Secrets
+        env:
+          APP_ENV: test
+          JWT_SECRET: ${{ runner.temp }}-ephemeral-ci-jwt-secret-key-minimum-32-bytes-long
+          KEY_ENCRYPTION_SECRET: ${{ runner.temp }}-ephemeral-ci-aes-256-gcm-secret-key-32-bytes
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+  # ============================================================================
+  # 3. Frontend TypeScript Strict Typecheck, Vitest & Production Bundle Build
+  # ============================================================================
+  frontend-build-test:
+    name: React TypeScript Build & Vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Frontend Unit Tests (Vitest)
+        run: npm test
+
+      - name: Build Production Frontend Bundle (tsc + vite)
+        run: npm run build
+
+  # ============================================================================
+  # 4. Containerization & Live E2E Smoke Verification
+  # ============================================================================
+  container-e2e-smoke:
+    name: Docker Build & Live E2E Smoke Test
+    runs-on: ubuntu-latest
+    needs: [security-audit, backend-test, frontend-build-test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate CSPRNG Secret Files for Container Mount
+        run: |
+          mkdir -p .secrets
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .secrets/jwt_secret.txt
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .secrets/key_encryption_secret.txt
+
+      - name: Build Production Multi-Stage Docker Image
+        run: docker build -t eneba-marketplace:ci .
+
+      - name: Boot Container with File-Injected Secrets & Run E2E Smoke Assertions
+        run: |
+          docker run -d --name eneba-e2e \
+            -p 8080:8080 \
+            -v "$(pwd)/.secrets:/run/secrets:ro" \
+            -e APP_ENV=production \
+            -e JWT_SECRET_FILE=/run/secrets/jwt_secret.txt \
+            -e KEY_ENCRYPTION_SECRET_FILE=/run/secrets/key_encryption_secret.txt \
+            eneba-marketplace:ci
+
+          for i in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:8080/api/v1/health | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8080/api/v1/homepage/blocks | grep -q '"HeroPromotionService"'
+          curl -fsS "http://127.0.0.1:8080/api/v1/products?q=witcer+3" | grep -q '"The Witcher 3: Wild Hunt - Complete Edition"'
+          docker rm -f eneba-e2e

@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --eneba-bg-deep: #140526;
+    --eneba-bg-main: #1d0936;
+    --eneba-bg-header: #290849;
+    --eneba-card: #280e4a;
+    --eneba-card-hover: #34135e;
+    --eneba-border: #481d7d;
+    --eneba-yellow: #ffd524;
+    --eneba-yellow-hover: #ffe055;
+    --eneba-green: #00e676;
+    --eneba-cyan: #00b0ff;
+    --eneba-pink: #ff4081;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #16072c;
+    background-image: 
+      radial-gradient(circle at 15% 0%, rgba(103, 30, 184, 0.32) 0%, transparent 45%),
+      radial-gradient(circle at 85% 10%, rgba(255, 64, 129, 0.12) 0%, transparent 40%),
+      linear-gradient(180deg, #1f083d 0%, #150529 100%);
+    background-attachment: fixed;
+    color: #ffffff;
+    min-height: 100vh;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom Eneba Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #140526;
+}
+::-webkit-scrollbar-thumb {
+  background: #481d7d;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ffd524;
+}

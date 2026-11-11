@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: eneba-marketplace-2027
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: "8080"
+      - key: DB_PATH
+        value: /tmp/eneba.db
+      - key: STATIC_DIR
+        value: /app/static
+      # Render automatically generates and injects 256-bit random secrets at deploy time
+      - key: JWT_SECRET
+        generateValue: true
+      - key: KEY_ENCRYPTION_SECRET
+        generateValue: true
